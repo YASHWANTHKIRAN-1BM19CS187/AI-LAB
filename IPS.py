@@ -1,71 +1,145 @@
-def dfs(src,target,limit,visited_states):
-    if src == target:
-        return True
-    if limit <= 0:
-        return False
-    visited_states.append(src)
-    moves = possible_moves(src,visited_states)   
-    for move in moves:
-        if dfs(move, target, limit-1, visited_states):
-            return True
-    return False
+import collections
+import queue
+import time
+import itertools
 
-def possible_moves(state,visited_states): 
-    b = state.index(-1)  
-    d = []
-    if b not in [0,1,2]: 
-        d += 'u'
-    if b not in [6,7,8]:
-        d += 'd'
-    if b not in [2,5,8]: 
-        d += 'r'
-    if b not in [0,3,6]: 
-        d += 'l'
-    pos_moves = []
-    for move in d:
-        pos_moves.append(gen(state,move,b))
-    return [move for move in pos_moves if move not in visited_states]
-def gen(state, move, blank): 
-    temp = state.copy()                              
-    if move == 'u':
-        temp[blank-3], temp[blank] = temp[blank], temp[blank-3]
-    if move == 'd':
-        temp[blank+3], temp[blank] = temp[blank], temp[blank+3]
-    if move == 'r':
-        temp[blank+1], temp[blank] = temp[blank], temp[blank+1]
-    if move == 'l':
-        temp[blank-1], temp[blank] = temp[blank], temp[blank-1]
-    return temp
-def iddfs(src,target,depth):
-    for i in range(depth):
-        visited_states = []
-        if dfs(src,target,i+1,visited_states):
-            return True
-    return False
-#Test 1
-src = [1,2,3,-1,4,5,6,7,8]
-target = [1,2,3,4,5,-1,6,7,8]         
+class Node:
 
-depth = 1
-iddfs(src, target, depth)
-#Test 2
-src = [3,5,2,8,7,6,4,1,-1]
-target = [-1,3,7,8,1,5,4,6,2]
+    def __init__(self, puzzle, last=None):
+        self.puzzle = puzzle
+        self.last = last
 
-depth = 1
-iddfs(src, target, depth)
-# Test 2
-src = [1,2,3,-1,4,5,6,7,8] 
-target=[1,2,3,6,4,5,-1,7,8]
+    @property
+    def seq(self): # to keep track of the sequence used to get to the goal
+        node, seq = self, []
+        while node:
+            seq.append(node)
+            node = node.last
+        yield from reversed(seq)
 
-depth = 1
-iddfs(src, target, depth)
+    @property
+    def state(self):
+        return str(self.puzzle.board) # hashable so it can be compared in sets
 
-src = [1, 2, 3, 4, 5, 6, 7, 8, -1]
-target = [-1, 1, 2, 3, 4, 5, 6, 7, 8]
+    @property
+    def isSolved(self):
+        return self.puzzle.isSolved
 
-for i in range(1, 100):
-    val = iddfs(src,target,i)
-    print(i, val)
-    if val == True:
-        break
+    @property
+    def getMoves(self):
+        return self.puzzle.getMoves
+
+class Puzzle:
+
+    def __init__(self, startBoard):
+        self.board = startBoard
+
+    @property
+    def getMoves(self):
+
+        possibleNewBoards = []
+
+        zeroPos = self.board.index(0) # find the zero tile to determine possible moves
+
+        if zeroPos == 0:
+            possibleNewBoards.append(self.move(0,1))
+            possibleNewBoards.append(self.move(0,3))
+        elif zeroPos == 1:
+            possibleNewBoards.append(self.move(1,0))
+            possibleNewBoards.append(self.move(1,2))
+            possibleNewBoards.append(self.move(1,4))
+        elif zeroPos == 2:
+            possibleNewBoards.append(self.move(2,1))
+            possibleNewBoards.append(self.move(2,5))
+        elif zeroPos == 3:
+            possibleNewBoards.append(self.move(3,0))
+            possibleNewBoards.append(self.move(3,4))
+            possibleNewBoards.append(self.move(3,6))
+        elif zeroPos == 4:
+            possibleNewBoards.append(self.move(4,1))
+            possibleNewBoards.append(self.move(4,3))
+            possibleNewBoards.append(self.move(4,5))
+            possibleNewBoards.append(self.move(4,7))
+        elif zeroPos == 5:
+            possibleNewBoards.append(self.move(5,2))
+            possibleNewBoards.append(self.move(5,4))
+            possibleNewBoards.append(self.move(5,8))
+        elif zeroPos == 6:
+            possibleNewBoards.append(self.move(6,3))
+            possibleNewBoards.append(self.move(6,7))
+        elif zeroPos == 7:
+            possibleNewBoards.append(self.move(7,4))
+            possibleNewBoards.append(self.move(7,6))
+            possibleNewBoards.append(self.move(7,8))
+        else:
+            possibleNewBoards.append(self.move(8,5))
+            possibleNewBoards.append(self.move(8,7))
+
+        return possibleNewBoards # returns Puzzle objects (maximum of 4 at a time)
+
+    def move(self, current, to):
+
+        changeBoard = self.board[:] # create a copy
+        changeBoard[to], changeBoard[current] = changeBoard[current], changeBoard[to] # switch the tiles at the passed positions
+        return Puzzle(changeBoard) # return a new Puzzle object
+
+    def printPuzzle(self): # prints board in 8 puzzle style
+
+        copyBoard = self.board[:]
+        for i in range(9):
+            if i == 2 or i == 5:
+                print((str)(copyBoard[i]))
+            else:
+                print((str)(copyBoard[i])+" ", end="")
+        print('\n')
+
+    @property
+    def isSolved(self):
+        return self.board == [0,1,2,3,4,5,6,7,8] # goal board
+
+class Solver:
+
+    def __init__(self, Puzzle):
+        self.puzzle = Puzzle
+
+    def IDDFS(self):
+
+        def DLS(currentNode, depth):
+            if depth == 0:
+                return None
+            if currentNode.isSolved:
+                return currentNode
+            elif depth > 0:
+                for board in currentNode.getMoves:
+                    nextNode = Node(board, currentNode)
+                    if nextNode.state not in visited:
+                        visited.add(nextNode.state)
+                        goalNode = DLS(nextNode, depth - 1)
+                        if goalNode != None: # I thought this should be redundant but it never finds a soln if I take it out
+                            if goalNode.isSolved: # same as above ^
+                                return goalNode
+
+        for depth in itertools.count():
+            visited = set()
+            startNode = Node(self.puzzle)
+            print(startNode.isSolved)
+            goalNode = DLS(startNode, depth)
+            if goalNode != None:
+                if goalNode.isSolved:
+                    return goalNode.seq
+
+startingBoard = [7,2,4,5,0,6,8,3,1]
+
+myPuzzle = Puzzle(startingBoard)
+mySolver = Solver(myPuzzle)
+start = time.time()
+goalSeq = mySolver.IDDFS()
+end = time.time()
+
+counter = -1 # starting state doesn't count as a move
+for node in goalSeq:
+    counter = counter + 1
+    node.puzzle.printPuzzle()
+print("Total number of moves: " + str(counter))
+totalTime = end - start
+print("Total searching time: %.2f seconds" % (totalTime))
